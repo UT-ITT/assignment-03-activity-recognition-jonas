@@ -118,17 +118,23 @@ class SensorUDP(Sensor):
         self._connection_thread.start()
 
     def _receive(self):
+        import socket as _socket
         self._receiving = True
         while self._receiving:
             try:
                 data, addr = self._sock.recvfrom(1024)
-            except TimeoutError:
+            # settimeout() raises socket.timeout (OSError), not TimeoutError
+            except (TimeoutError, _socket.timeout):
                 continue
             try:
                 data_decoded = data.decode()
             except UnicodeDecodeError:
                 continue
             self._update(data_decoded)
+            # When the OS UDP buffer has many datagrams, recvfrom never blocks; without
+            # yielding, this thread can monopolize the GIL and starve the main thread
+            # (e.g. button polling in gather_data.py).
+            sleep(0)
 
 # sensor connected via serial connection (USB)
 # initialized with a path to a TTY (e.g. /dev/ttyUSB0)
